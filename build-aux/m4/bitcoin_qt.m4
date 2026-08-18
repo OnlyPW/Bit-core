@@ -114,10 +114,19 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
   CPPFLAGS="$QT_INCLUDES $CPPFLAGS"
   CXXFLAGS="$PIC_FLAGS $CXXFLAGS"
   if test x$bitcoin_qt_got_major_vers = x5; then
-    _BITCOIN_QT_IS_STATIC
-    if test x$bitcoin_cv_static_qt = xyes; then
+      _BITCOIN_QT_IS_STATIC
+      if test x$bitcoin_cv_static_qt = xyes; then
       _BITCOIN_QT_FIND_STATIC_PLUGINS
       AC_DEFINE(QT_STATICPLUGIN, 1, [Define this symbol if qt plugins are static])
+      AC_CACHE_CHECK(for > Qt 5.7, bitcoin_cv_qt58,[AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+          [[#include <QtCore>]],[[
+          #if QT_VERSION < 0x050800
+          choke;
+          #endif
+          ]])],
+        [bitcoin_cv_qt58=yes],
+        [bitcoin_cv_qt58=no])
+      ])
       AC_CACHE_CHECK(for Qt < 5.4, bitcoin_cv_need_acc_widget,[AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
           [[#include <QtCore>]],[[
           #if QT_VERSION >= 0x050400
@@ -343,7 +352,19 @@ AC_DEFUN([_BITCOIN_QT_FIND_STATIC_PLUGINS],[
      if test x$use_pkgconfig = xyes; then
      : dnl
      m4_ifdef([PKG_CHECK_MODULES],[
-       PKG_CHECK_MODULES([QTPLATFORM], [Qt5PlatformSupport], [QT_LIBS="$QTPLATFORM_LIBS $QT_LIBS"])
+       if test x$bitcoin_cv_qt58 = xno; then
+         PKG_CHECK_MODULES([QTPLATFORM], [Qt5PlatformSupport], [QT_LIBS="$QTPLATFORM_LIBS $QT_LIBS"])
+       else
+         PKG_CHECK_MODULES([QTFONTDATABASE], [Qt5FontDatabaseSupport], [QT_LIBS="-lQt5FontDatabaseSupport $QT_LIBS"])
+         PKG_CHECK_MODULES([QTEVENTDISPATCHER], [Qt5EventDispatcherSupport], [QT_LIBS="-lQt5EventDispatcherSupport $QT_LIBS"])
+         PKG_CHECK_MODULES([QTTHEME], [Qt5ThemeSupport], [QT_LIBS="-lQt5ThemeSupport $QT_LIBS"])
+         PKG_CHECK_MODULES([QTDEVICEDISCOVERY], [Qt5DeviceDiscoverySupport], [QT_LIBS="-lQt5DeviceDiscoverySupport $QT_LIBS"])
+         PKG_CHECK_MODULES([QTACCESSIBILITY], [Qt5AccessibilitySupport], [QT_LIBS="-lQt5AccessibilitySupport $QT_LIBS"])
+         PKG_CHECK_MODULES([QTFB], [Qt5FbSupport], [QT_LIBS="-lQt5FbSupport $QT_LIBS"])
+         if test "x$TARGET_OS" = xwindows; then
+           QT_LIBS="$QT_LIBS -lversion -ldwmapi -luxtheme"
+         fi
+       fi
        if test x$TARGET_OS = xlinux; then
          if ${PKG_CONFIG} --exists "Qt5Core >= 5.5" 2>/dev/null; then
            PKG_CHECK_MODULES([QTXCBQPA], [Qt5XcbQpa], [QT_LIBS="$QTXCBQPA_LIBS $QT_LIBS"])
