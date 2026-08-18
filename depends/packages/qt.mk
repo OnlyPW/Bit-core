@@ -88,7 +88,6 @@ $(package)_config_opts += -no-feature-image_heuristic_mask
 $(package)_config_opts += -no-feature-keysequenceedit
 $(package)_config_opts += -no-feature-lcdnumber
 $(package)_config_opts += -no-feature-networkdiskcache
-$(package)_config_opts += -no-feature-pdf
 $(package)_config_opts += -no-feature-socks5
 $(package)_config_opts += -no-feature-sql
 $(package)_config_opts += -no-feature-statemachine
