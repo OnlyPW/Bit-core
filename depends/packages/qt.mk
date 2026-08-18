@@ -41,6 +41,7 @@ $(package)_config_opts += -no-kms
 $(package)_config_opts += -no-linuxfb
 $(package)_config_opts += -no-libjpeg
 $(package)_config_opts += -no-libproxy
+$(package)_config_opts += -feature-printer -feature-printdialog -feature-printpreviewdialog -feature-printpreviewwidget
 $(package)_config_opts += -no-libudev
 $(package)_config_opts += -no-mtdev
 $(package)_config_opts += -openssl-linked
@@ -249,4 +250,3 @@ define $(package)_postprocess_cmds
   rm -rf native/mkspecs/ native/lib/ lib/cmake/ && \
   rm -f lib/lib*.la lib/*.prl plugins/*/*.prl
 endef
-$(package)_config_opts += -feature-printer -feature-printdialog -feature-printpreviewdialog -feature-printpreviewwidget
