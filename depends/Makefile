@@ -103,13 +103,14 @@ $(host_arch)_$(host_os)_id_string+=$(shell $(host_STRIP) --version 2>/dev/null)
 qrencode_packages_$(NO_QR) = $(qrencode_packages)
 
 qt_packages_$(NO_QT) = $(qt_packages) $(qt_$(host_os)_packages) $(qt_$(host_arch)_$(host_os)_packages) $(qrencode_packages_)
+qt_native_packages_$(NO_QT) = $(qt_native_packages)
 
 wallet_packages_$(NO_WALLET) = $(wallet_packages)
 upnp_packages_$(NO_UPNP) = $(upnp_packages)
 zmq_packages_$(NO_ZMQ) = $(zmq_packages)
 
 packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(wallet_packages_) $(upnp_packages_)
-native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages)
+native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages) $(qt_native_packages_)
 
 ifneq ($(zmq_packages_),)
 packages += $(zmq_packages)
