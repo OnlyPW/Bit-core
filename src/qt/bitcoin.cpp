@@ -32,6 +32,7 @@
 #include "scheduler.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "utiltime.h"
 #include "warnings.h"
 
 #ifdef ENABLE_WALLET
@@ -44,10 +45,12 @@
 #include <boost/thread.hpp>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QMessageBox>
+#include <QProcess>
 #include <QSettings>
 #include <QThread>
 #include <QTimer>
@@ -539,6 +542,38 @@ WId BitcoinApplication::getMainWinId() const
 }
 
 #ifndef BITCOIN_QT_TEST
+//
+// Apply a wallet import that was prepared by the GUI (see
+// BitcoinGUI::importWallet). Must run after the clean shutdown has released
+// the wallet file: backs up the current wallet, swaps in the imported one and
+// relaunches with -rescan. The relaunched instance waits briefly
+// (-importrestart) so the old process can finish exiting.
+static void PerformPendingWalletImport()
+{
+    boost::filesystem::path marker = GetDataDir() / ".wallet-import-pending";
+    if (!boost::filesystem::exists(marker))
+        return;
+    boost::filesystem::remove(marker);
+
+    boost::filesystem::path datadir = GetDataDir();
+    boost::filesystem::path importFile = datadir / "wallet-import.dat";
+    if (!boost::filesystem::exists(importFile))
+        return;
+
+    std::string walletFile = GetArg("-wallet", "wallet.dat");
+    boost::filesystem::path current = datadir / walletFile;
+    if (boost::filesystem::exists(current)) {
+        std::string stamp = DateTimeStrFormat("%Y%m%d%H%M%S", GetTime());
+        boost::filesystem::rename(current, datadir / (walletFile + ".bak-" + stamp));
+    }
+    boost::filesystem::rename(importFile, current);
+    qDebug() << "Wallet import applied, restarting with rescan";
+
+    QStringList relaunchArgs;
+    relaunchArgs << "-rescan" << "-importrestart";
+    QProcess::startDetached(QCoreApplication::applicationFilePath(), relaunchArgs);
+}
+
 MAIN_FUNCTION
 {
     SetupEnvironment();
@@ -546,6 +581,12 @@ MAIN_FUNCTION
     /// 1. Parse command-line options. These take precedence over anything else.
     // Command-line options take precedence:
     ParseParameters(argc, argv);
+
+    // Wallet-import relaunch: give the previous instance time to fully exit
+    // and release the wallet file before this instance opens it.
+    if (GetBoolArg("-importrestart", false)) {
+        QThread::msleep(3000);
+    }
 
     // Do not refer to data directory yet, this can be overridden by Intro::pickDataDirectory
 
@@ -704,6 +745,9 @@ MAIN_FUNCTION
         app.exec();
         app.requestShutdown();
         app.exec();
+        // All node locks are released now: apply a pending wallet import
+        // (backs up + swaps the wallet file) and relaunch with -rescan.
+        PerformPendingWalletImport();
     } catch (const std::exception& e) {
         PrintExceptionContinue(&e, "Runaway exception");
         app.handleRunawayException(QString::fromStdString(GetWarnings("gui")));

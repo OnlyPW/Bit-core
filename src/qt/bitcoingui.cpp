@@ -46,6 +46,8 @@
 #include <QDateTime>
 #include <QDesktopWidget>
 #include <QDragEnterEvent>
+#include <QFile>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QListWidget>
 #include <QMenuBar>
@@ -53,6 +55,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QProgressDialog>
+#include <fstream>
 #include <QSettings>
 #include <QShortcut>
 #include <QStackedWidget>
@@ -624,6 +627,9 @@ void BitcoinGUI::createActions()
     encryptWalletAction->setCheckable(true);
     backupWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/filesave"), tr("&Backup Wallet..."), this);
     backupWalletAction->setStatusTip(tr("Backup wallet to another location"));
+
+    importWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("&Import Wallet..."), this);
+    importWalletAction->setStatusTip(tr("Import a wallet backup file (replaces the current wallet)"));
     changePassphraseAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Change Passphrase..."), this);
     changePassphraseAction->setStatusTip(tr("Change the passphrase used for wallet encryption"));
     signMessageAction = new QAction(platformStyle->TextColorIcon(":/icons/edit"), tr("Sign &message..."), this);
@@ -668,6 +674,7 @@ void BitcoinGUI::createActions()
     {
         connect(encryptWalletAction, SIGNAL(triggered(bool)), walletFrame, SLOT(encryptWallet(bool)));
         connect(backupWalletAction, SIGNAL(triggered()), walletFrame, SLOT(backupWallet()));
+        connect(importWalletAction, SIGNAL(triggered()), this, SLOT(importWallet()));
         connect(changePassphraseAction, SIGNAL(triggered()), walletFrame, SLOT(changePassphrase()));
         connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
         connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
@@ -699,6 +706,7 @@ void BitcoinGUI::createMenuBar()
     {
         file->addAction(openAction);
         file->addAction(backupWalletAction);
+        file->addAction(importWalletAction);
         file->addAction(signMessageAction);
         file->addAction(verifyMessageAction);
         file->addAction(paperWalletAction);
@@ -865,6 +873,7 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     nicknamesAction->setEnabled(enabled);
     encryptWalletAction->setEnabled(enabled);
     backupWalletAction->setEnabled(enabled);
+    importWalletAction->setEnabled(enabled);
     changePassphraseAction->setEnabled(enabled);
     signMessageAction->setEnabled(enabled);
     verifyMessageAction->setEnabled(enabled);
@@ -875,6 +884,56 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     if (nicknameAlertsControl) {
         nicknameAlertsControl->setVisible(enabled);
     }
+}
+
+void BitcoinGUI::importWallet()
+{
+    QString filename = GUIUtil::getOpenFileName(this,
+        tr("Import Wallet"), QString(),
+        tr("Wallet Data (*.dat)"), NULL);
+
+    if (filename.isEmpty())
+        return;
+
+    QFileInfo fileInfo(filename);
+    if (!fileInfo.isFile() || !fileInfo.isReadable() || fileInfo.size() == 0) {
+        Q_EMIT message(tr("Import Wallet"), tr("The selected file is not a readable wallet file."),
+            CClientUIInterface::MSG_ERROR);
+        return;
+    }
+
+    QMessageBox::StandardButton btn = QMessageBox::question(this, tr("Import Wallet"),
+        tr("The wallet file %1 will replace your current wallet.\n\n"
+           "Your current wallet is backed up automatically as wallet.dat.bak-<timestamp>.\n"
+           "The application will now shut down, apply the import and restart with a rescan of the blockchain.")
+            .arg(filename),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (btn != QMessageBox::Yes)
+        return;
+
+    boost::filesystem::path importDest = GetDataDir() / "wallet-import.dat";
+    QString importDestQ = QString::fromStdString(importDest.string());
+    if (QFile::exists(importDestQ))
+        QFile::remove(importDestQ);
+    if (!QFile::copy(filename, importDestQ)) {
+        Q_EMIT message(tr("Import Wallet"), tr("Could not copy the wallet file into the data directory."),
+            CClientUIInterface::MSG_ERROR);
+        return;
+    }
+
+    boost::filesystem::path marker = GetDataDir() / ".wallet-import-pending";
+    std::ofstream markerStream(marker.string().c_str(), std::ios::out);
+    if (markerStream)
+        markerStream.close();
+    else {
+        Q_EMIT message(tr("Import Wallet"), tr("Could not prepare the wallet import."),
+            CClientUIInterface::MSG_ERROR);
+        return;
+    }
+
+    // Trigger the normal quit path: main() performs the file swap after the
+    // clean shutdown has released the wallet and relaunches with -rescan.
+    qApp->quit();
 }
 
 void BitcoinGUI::createTrayIcon(const NetworkStyle *networkStyle)
